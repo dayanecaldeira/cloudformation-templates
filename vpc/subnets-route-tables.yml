@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create an new VPC, subnets, and route tables rules
+Resources:
+  SystemVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      Tags:
+        - Key: Name
+          Value: SystemVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SystemIGW
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SystemVPC
+      InternetGatewayId: !Ref InternetGateway
+  
+  PrivateSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SystemVPC
+      CidrBlock: 10.1.0.0/24
+      AvailabilityZone: "us-east-1a"
+      Tags:
+        - Key: Name
+          Value: private_subnet_1a
+  
+  PrivateSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SystemVPC
+      CidrBlock: 10.1.2.0/24
+      AvailabilityZone: "us-east-1c"
+      Tags:
+        - Key: Name
+          Value: private_subnet_1c
+
+  PublicSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SystemVPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: "us-east-1a"
+      Tags:
+        - Key: Name
+          Value: public_subnet_1a
+
+  PublicSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SystemVPC
+      CidrBlock: 10.1.3.0/24
+      AvailabilityZone: "us-east-1c"
+      Tags:
+        - Key: Name
+          Value: public_subnet_1c
+  
+  PrivateRouteTable1a:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVPC
+      Tags:
+        - Key: Name
+          Value: private_route_table_1a
+
+  PrivateSubnetRouteTableAssociation1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1a
+      RouteTableId: !Ref PrivateRouteTable1a
+
+  PrivateRouteTable1c:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVPC
+      Tags:
+        - Key: Name
+          Value: private_route_table_1c
+
+  PrivateSubnetRouteTableAssociation1c:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1c
+      RouteTableId: !Ref PrivateRouteTable1c
+
+  PublicRouteTable1a:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVPC
+      Tags:
+        - Key: Name
+          Value: public_route_table_1a
+
+  PublicSubnetRouteTableAssociation1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1a
+      RouteTableId: !Ref PublicRouteTable1a
+
+  PublicRouteTable1c:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVPC
+      Tags:
+        - Key: Name
+          Value: public_route_table_1c
+
+  PublicSubnetRouteTableAssociation1c:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1c
+      RouteTableId: !Ref PublicRouteTable1c
+
+  PublicInternetRoute1a:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1a
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicInternetRoute1c:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1c
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
