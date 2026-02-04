@@ -3,13 +3,13 @@ Description: Create an EC2 instances
 Parameters:
   SystemVPCID:
     Type: String
-    Default: change-me
+    Default: vpc-007089099a2ba76b7
   PublicSubnetID:
     Type: String
-    Default: change-me
+    Default: subnet-0de943701237e1bb8
   PrivateSubnetID:
     Type: String
-    Default: change-me
+    Default: subnet-0646abaf56a5c5f8c
 
 
 Resources:
@@ -24,6 +24,12 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
+    
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: EC2InstanceRoleSSM
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -50,7 +56,7 @@ Resources:
           GroupSet:
             - !Ref SecurityGroup
           SubnetId: !Ref PublicSubnetID
-      IamInstanceProfile: !Ref EC2InstanceRoleSSM
+      IamInstanceProfile: !Ref EC2InstanceProfile
       Tags:
         - Key: Name
           Value: public_instance
