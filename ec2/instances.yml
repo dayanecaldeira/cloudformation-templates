@@ -3,13 +3,13 @@ Description: Create an EC2 instances
 Parameters:
   SystemVPCID:
     Type: String
-    Default: vpc-007089099a2ba76b7
+    Default: change-me
   PublicSubnetID:
     Type: String
-    Default: subnet-0de943701237e1bb8
+    Default: change-me
   PrivateSubnetID:
     Type: String
-    Default: subnet-0646abaf56a5c5f8c
+    Default: change-me
 
 
 Resources:
@@ -24,7 +24,9 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-    
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -60,6 +62,13 @@ Resources:
       Tags:
         - Key: Name
           Value: public_instance
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Ensures the SSM agent is installed and running
+          yum install -y amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
 
   PrivateEC2Instance:
     Type: AWS::EC2::Instance
@@ -72,3 +81,10 @@ Resources:
       Tags:
         - Key: Name
           Value: private_instance
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Ensures the SSM agent is installed and running
+          yum install -y amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
