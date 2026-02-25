@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a new DHCP options set for the VPC
+
+Parameters:
+  DefaultVPCID:
+    Type: String
+    Default: change-me
+
+Resources:
+  SystemDHCPOptionsSet:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: dcmfc.com
+      DomainNameServers:
+        - 1.1.1.1
+        - 8.8.8.8
+      Tags:
+        - Key: Name
+          Value: SystemDHCPOptionsSet
+
+  VPCDHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId: !Ref DefaultVPCID
+      DhcpOptionsId: !Ref SystemDHCPOptionsSet
+
+  SystemSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow all internal VPC traffic
+      VpcId: !Ref DefaultVPCID
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 10.1.0.0/16
+      Tags:
+        - Key: Name
+          Value: SystemSecurityGroup
+
+  EC2InstanceRoleSSM:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2S3AccessRoleSSM
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: EC2InstanceRoleSSM
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0532be01f26a3de55
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref SystemSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: new_instance
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Ensures the SSM agent is installed and running
+          sudo yum install -y amazon-ssm-agent
+          sudo systemctl enable amazon-ssm-agent
+          sudo systemctl start amazon-ssm-agent
