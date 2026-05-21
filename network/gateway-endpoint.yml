@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a gateway endpoint for S3 in the VPC
+
+Resources:
+  SystemVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: SystemVPC
+  
+  PrivateSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SystemVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: "us-east-1a"
+      Tags:
+        - Key: Name
+          Value: private_subnet_1a
+  
+  PrivateRouteTable1a:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVPC
+      Tags:
+        - Key: Name
+          Value: private_route_table_1a
+  
+  RouteTableAssociation1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1a
+      RouteTableId: !Ref PrivateRouteTable1a
+
+  SSMEndpointSystemVPC:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SystemVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1a
+      PrivateDnsEnabled: true
+
+  SSMMessagesEndpointSystemVPC:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SystemVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1a
+      PrivateDnsEnabled: true
+
+  EC2MessagesEndpointSystemVPC:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SystemVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1a
+      PrivateDnsEnabled: true
+
+  S3GatewayEndpointSystemVPC:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SystemVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable1a
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "s3:*"
+            Resource: "*"
+ 
+  EC2InstanceRoleSSM:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2S3AccessRoleSSM
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  EC2InstanceProfileSSM:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: EC2S3AccessInstanceProfileSSM
+      Roles:
+        - !Ref EC2InstanceRoleSSM
+ 
+  WebserverEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0532be01f26a3de55
+      InstanceType: t2.micro
+      SubnetId: !Ref PrivateSubnet1a
+      IamInstanceProfile: !Ref EC2InstanceProfileSSM
+      Tags:
+        - Key: Name
+          Value: private_instance
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Ensures the SSM agent is installed and running
+          sudo yum install -y amazon-ssm-agent
+          sudo systemctl enable amazon-ssm-agent
+          sudo systemctl start amazon-ssm-agent
