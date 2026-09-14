@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 event notification using Lambda function
+
+Parameters:
+  FirstBucketNameParameter:
+    Type: String
+    Description: 'Enter a globally unique name for your first S3 bucket'
+  SecondBucketNameParameter:
+    Type: String
+    Description: 'Enter a globally unique name for your second S3 bucket'
+
+Resources:
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'S3AccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Grants permissions to list, get, and put objects in the specific bucket
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${FirstBucketNameParameter}'
+                  - !Sub 'arn:aws:s3:::${FirstBucketNameParameter}/*'
+                  - !Sub 'arn:aws:s3:::${SecondBucketNameParameter}'
+                  - !Sub 'arn:aws:s3:::${SecondBucketNameParameter}/*'
+
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'resize-image-lambda'
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+          import io
+
+          s3_client = boto3.client("s3")
+          def lambda_handler(event, context):
+              # Get the bucket and filename from the event
+              source_bucket = event["Records"][0]["s3"]["bucket"]["name"]
+              key = event["Records"][0]["s3"]["object"]["key"]
+
+              # Get the destination bucket from the environment variable
+              destination_bucket = os.environ["DESTINATION_BUCKET"]
+
+              # Download the image from the source bucket
+              try:
+                  response = s3_client.get_object(Bucket=source_bucket, Key=key)
+                  image_content = response["Body"].read()
+
+                  # Define the new filename for the resized image, you can adjust this logic as needed
+                  new_key = f"resized-{key}"
+
+                  # Upload the resized image to the destination bucket
+                  s3_client.put_object(
+                      Bucket=destination_bucket,
+                      Key=new_key,
+                      Body=image_content,
+                      ContentType="image/png",
+                  )
+
+                  print(
+                      f"Successfully processed '{key}' and uploaded as '{new_key}' to '{destination_bucket}'"
+                  )
+
+              except Exception as e:
+                  print(f"Error processing object {key} from bucket {source_bucket}. Error: {e}")
+                  raise e
+
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref MyLambdaFunction
+      Principal: 's3.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:s3:::${FirstBucketNameParameter}'
+
+  FirstS3Bucket:
+    Type: AWS::S3::Bucket
+    DependsOn: S3InvokeLambdaPermission # Ensures permissions exist before S3 attempts validation
+    Properties:
+      BucketName: !Ref FirstBucketNameParameter
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt MyLambdaFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: '.png'
+
+      # Blocks public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SecondS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref SecondBucketNameParameter
+
+      # Blocks public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
